@@ -18,9 +18,24 @@ redis = Redis.from_url(
     decode_responses=True
 )
 
+def get_client_ip(request: Request):
+    # Check for X-Forwarded-For header first
+    forwarded_for = request.headers.get("X-Forwarded-For")
+    if forwarded_for:
+        # X-Forwarded-For can contain multiple IPs; we want the first one
+        return forwarded_for.split(',')[0].strip()
+    
+    # If X-Forwarded-For is not present, try X-Real-IP
+    real_ip = request.headers.get("X-Real-IP")
+    if real_ip:
+        return real_ip
+    
+    # If neither header is present, fall back to the direct client IP
+    return request.client.host
+
 class RateLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        client_ip = request.client.host
+        client_ip = get_client_ip(request)
         redis_key = f"rate_limit:{client_ip}"
 
         #? Get the current request count for this IP
